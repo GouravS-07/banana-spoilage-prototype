@@ -1,0 +1,40 @@
+{
+  "scenarios": [
+    {
+      "batch_id": "BATCH-001-COLD",
+      "name": "Optimal Cold Storage Room",
+      "base_temp_c": 14.0,
+      "temp_jitter": 0.3,
+      "base_rh_pct": 88.0,
+      "rh_jitter": 1.0,
+      "base_gas_ratio": 0.98,
+      "gas_jitter": 0.01,
+      "base_weight_kg": 24.9,
+      "weight_decay_per_day": 0.05
+    },
+    {
+      "batch_id": "BATCH-002-AMBIENT",
+      "name": "Standard Ambient Retail Display",
+      "base_temp_c": 19.5,
+      "temp_jitter": 0.5,
+      "base_rh_pct": 82.0,
+      "rh_jitter": 2.0,
+      "base_gas_ratio": 0.92,
+      "gas_jitter": 0.02,
+      "base_weight_kg": 19.4,
+      "weight_decay_per_day": 0.15
+    },
+    {
+      "batch_id": "BATCH-003-HOTBOX",
+      "name": "Unventilated Warm Storage (Decaying)",
+      "base_temp_c": 26.5,
+      "temp_jitter": 0.8,
+      "base_rh_pct": 94.0,
+      "rh_jitter": 1.5,
+      "base_gas_ratio": 0.65,
+      "gas_jitter": 0.04,
+      "base_weight_kg": 26.8,
+      "weight_decay_per_day": 0.35
+    }
+  ]
+}

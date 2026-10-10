@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Post-Harvest Banana Spoilage & Sell-First Advisor</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>🍌 Banana Spoilage Advisor</h1>
+        <div class="subtext">Phase 1 End-to-End Simulation-First Prototype</div>
+      </div>
+      <div>
+        <span class="badge badge-simulated" id="provenance-indicator">● Active Telemetry: Simulated</span>
+      </div>
+    </header>
+
+    <div class="notice-banner">
+      <strong>Data Integrity & Scientific Notice:</strong> This prototype ranks batches using transparent, configurable baseline rules. Sensor inputs are simulated (<span class="badge badge-simulated">SIMULATED</span>), computer vision outputs are placeholder (<span class="badge" style="background:#f3e8ff; color:#6b21a8;">MOCK PLACEHOLDER</span>), and gas readings reflect uncalibrated resistance ratios ($R_s/R_0$), not chemical ethylene measurements.
+    </div>
+
+    <!-- SELL-FIRST RANKED TABLE -->
+    <div class="card">
+      <div class="card-title">
+        <span>🏆 Sell-First Prioritized Queue</span>
+        <button class="btn" onclick="fetchAdvisorData()">↻ Refresh Rankings</button>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Batch ID</th>
+              <th>Variety</th>
+              <th>Risk Score</th>
+              <th>Urgency Tier</th>
+              <th>Recommendation</th>
+              <th>Primary Driver & Explanation</th>
+              <th>Data Provenance</th>
+            </tr>
+          </thead>
+          <tbody id="ranked-batches-tbody">
+            <tr><td colspan="8" style="text-align:center;">Loading priority rankings...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- BATCH DETAILS GRID -->
+    <div class="card">
+      <div class="card-title">
+        <span>📦 Tracked Batches & Latest Observations</span>
+      </div>
+      <div class="grid-3" id="batch-cards-container">
+        <!-- Dynamically populated -->
+      </div>
+    </div>
+
+    <!-- INGESTION & TESTING PANEL -->
+    <div class="card">
+      <div class="card-title">
+        <span>🧪 Test Ingestion & Verification Panel</span>
+      </div>
+      <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+        <!-- Push Simulated Telemetry Form -->
+        <div style="flex: 1; min-width: 300px;">
+          <h4 style="margin-bottom: 8px;">Push Simulated Reading to Batch</h4>
+          <form id="sim-form" onsubmit="submitSimulatedTelemetry(event)">
+            <div class="form-group">
+              <label>Target Batch ID</label>
+              <select id="sim-batch-id" class="form-control">
+                <option value="BATCH-001-COLD">BATCH-001-COLD</option>
+                <option value="BATCH-002-AMBIENT">BATCH-002-AMBIENT</option>
+                <option value="BATCH-003-HOTBOX">BATCH-003-HOTBOX</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Temperature (°C)</label>
+              <input type="number" step="0.1" id="sim-temp" class="form-control" value="28.0" required>
+            </div>
+            <div class="form-group">
+              <label>Relative Humidity (%)</label>
+              <input type="number" step="0.1" id="sim-rh" class="form-control" value="95.0" required>
+            </div>
+            <div class="form-group">
+              <label>Raw Gas Ratio Rs/R0 (Nominal: 0.95+)</label>
+              <input type="number" step="0.01" id="sim-gas" class="form-control" value="0.65" required>
+            </div>
+            <button type="submit" class="btn">Send via /api/telemetry/simulated</button>
+          </form>
+        </div>
+
+        <!-- Vision Image Upload Form -->
+        <div style="flex: 1; min-width: 300px;">
+          <h4 style="margin-bottom: 8px;">Upload Banana Image (Phase 1 Mock Endpoint)</h4>
+          <form id="vision-form" onsubmit="submitVisionImage(event)">
+            <div class="form-group">
+              <label>Target Batch ID</label>
+              <select id="vis-batch-id" class="form-control">
+                <option value="BATCH-001-COLD">BATCH-001-COLD</option>
+                <option value="BATCH-002-AMBIENT">BATCH-002-AMBIENT</option>
+                <option value="BATCH-003-HOTBOX">BATCH-003-HOTBOX</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Select Banana Photo (.jpg, .png)</label>
+              <input type="file" id="vis-file" class="form-control" accept="image/*" required>
+            </div>
+            <button type="submit" class="btn" style="background:#4f46e5;">Upload Image to /api/vision/assess</button>
+            <div id="vis-result" style="margin-top: 10px; font-size: 12px; color: #4b5563;"></div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
