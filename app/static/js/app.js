@@ -21,11 +21,20 @@ function renderRankingsTable(batches) {
     const tierBadgeClass = `badge-tier-${b.risk_tier.toLowerCase()}`;
     const rankClass = b.rank === 1 ? 'rank-pill rank-1' : 'rank-pill';
     
-    // Provenance badge
+    // Sensor Provenance badge
     const isSim = b.data_provenance.sensor_provenance === 'SIMULATED';
-    const provBadge = isSim 
-      ? '<span class="badge badge-simulated">SIMULATED</span>' 
-      : '<span class="badge badge-hardware">HARDWARE</span>';
+    const sensorBadge = isSim 
+      ? '<span class="badge badge-simulated" title="Simulated time-series sensor telemetry">SENSOR: SIMULATED</span>' 
+      : '<span class="badge badge-hardware" title="Physical hardware authenticated via device token">SENSOR: HARDWARE</span>';
+
+    // Vision Provenance badge
+    const vProv = b.data_provenance.vision_provenance;
+    let visionBadge = '<span class="badge badge-vision-none">VISION: NONE</span>';
+    if (vProv === 'REAL_MODEL') {
+      visionBadge = '<span class="badge badge-vision-real" title="Real Color-RF Model Inference (Uncalibrated model agreement)">VISION: COLOR-RF</span>';
+    } else if (vProv === 'PLACEHOLDER_MOCK') {
+      visionBadge = '<span class="badge badge-vision-mock" title="Demonstration placeholder heuristic">VISION: MOCK</span>';
+    }
 
     const completenessTag = b.assessment_completeness !== 'COMPLETE'
       ? `<br><small style="color:#d97706; font-size:11px;">⚠️ ${b.assessment_completeness}</small>`
@@ -43,7 +52,12 @@ function renderRankingsTable(batches) {
           <div>${b.primary_driver}</div>
           ${completenessTag}
         </td>
-        <td>${provBadge}</td>
+        <td>
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            ${sensorBadge}
+            ${visionBadge}
+          </div>
+        </td>
       </tr>
     `;
   }).join('');
@@ -60,9 +74,17 @@ function renderBatchCards(batches) {
     const tier = b.risk_tier.toLowerCase();
     const lr = b.latest_readings;
     const isSim = b.data_provenance.sensor_provenance === 'SIMULATED';
-    const provBadge = isSim 
-      ? '<span class="badge badge-simulated">SIMULATED</span>' 
-      : '<span class="badge badge-hardware">HARDWARE</span>';
+    const sensorBadge = isSim 
+      ? '<span class="badge badge-simulated">SENSOR: SIMULATED</span>' 
+      : '<span class="badge badge-hardware">SENSOR: HARDWARE</span>';
+
+    const vProv = b.data_provenance.vision_provenance;
+    let visionBadge = '<span class="badge badge-vision-none">VISION: NONE</span>';
+    if (vProv === 'REAL_MODEL') {
+      visionBadge = '<span class="badge badge-vision-real">VISION: COLOR-RF</span>';
+    } else if (vProv === 'PLACEHOLDER_MOCK') {
+      visionBadge = '<span class="badge badge-vision-mock">VISION: MOCK</span>';
+    }
 
     return `
       <div class="batch-card ${tier}">
@@ -70,7 +92,10 @@ function renderBatchCards(batches) {
           <div>
             <strong>${b.batch_id}</strong> (${b.variety})
           </div>
-          <div>${provBadge}</div>
+          <div style="display:flex; flex-direction:column; gap:2px; align-items:flex-end;">
+            ${sensorBadge}
+            ${visionBadge}
+          </div>
         </div>
         <div class="metric-row">
           <span class="metric-label">Composite Risk:</span>
@@ -158,7 +183,12 @@ async function submitVisionImage(e) {
       return;
     }
     const data = await res.json();
-    resultDiv.innerHTML = `✅ Upload successful! Stage: <strong>${data.ripeness_stage}</strong> (Placeholder heuristic, is_mock: ${data.is_mock_inference})`;
+    const isMock = data.is_mock_inference;
+    const modelTag = isMock 
+      ? '<span class="badge badge-vision-mock">MOCK PLACEHOLDER</span>' 
+      : '<span class="badge badge-vision-real">REAL COLOR-RF MODEL</span>';
+    const confDesc = isMock ? 'fixed' : `uncalibrated model agreement: ${(data.confidence_score * 100).toFixed(1)}%`;
+    resultDiv.innerHTML = `✅ Assessment complete! Stage: <strong>${data.ripeness_stage}</strong> (${confDesc}) | ${modelTag}`;
     await fetchAdvisorData();
   } catch (err) {
     resultDiv.textContent = `Upload error: ${err.message}`;

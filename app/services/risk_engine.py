@@ -69,6 +69,7 @@ def calculate_vision_penalty(stage: Optional[str]) -> Optional[float]:
     stage_upper = stage.strip().upper()
     mapping = {
         "UNDER_RIPE": settings.PENALTY_RIPENESS_UNDER_RIPE,
+        "HALF_RIPE": settings.PENALTY_RIPENESS_HALF_RIPE,
         "RIPE": settings.PENALTY_RIPENESS_RIPE,
         "OVER_RIPE": settings.PENALTY_RIPENESS_OVER_RIPE,
         "DECAYING": settings.PENALTY_RIPENESS_DECAYING,

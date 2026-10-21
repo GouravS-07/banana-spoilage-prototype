@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     # Prototype Ripeness Stage Penalties (0 - 100)
     # Note: Only real detected stages carry penalties. Unavailable vision is excluded.
     PENALTY_RIPENESS_UNDER_RIPE: float = 10.0
+    PENALTY_RIPENESS_HALF_RIPE: float = 20.0
     PENALTY_RIPENESS_RIPE: float = 35.0
     PENALTY_RIPENESS_OVER_RIPE: float = 75.0
     PENALTY_RIPENESS_DECAYING: float = 95.0

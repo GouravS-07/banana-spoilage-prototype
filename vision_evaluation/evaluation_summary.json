@@ -1,0 +1,52 @@
+{
+  "model_architecture": "Random Forest (100 Trees)",
+  "dataset_name": "Chuquimarca et al. Real Cavendish Dataset",
+  "dataset_license": "CC BY 4.0",
+  "random_seed": 42,
+  "sample_size_evaluated": 1000,
+  "split_counts": {
+    "train": 700,
+    "val": 152,
+    "test": 148
+  },
+  "test_metrics": {
+    "macro_precision": 0.7779,
+    "macro_recall": 0.777,
+    "macro_f1": 0.7767,
+    "accuracy": 0.777,
+    "dummy_baseline_f1": 0.1,
+    "dummy_baseline_accuracy": 0.25
+  },
+  "confusion_matrix": [
+    [
+      30,
+      6,
+      1,
+      0
+    ],
+    [
+      5,
+      26,
+      3,
+      3
+    ],
+    [
+      0,
+      2,
+      31,
+      4
+    ],
+    [
+      1,
+      2,
+      6,
+      28
+    ]
+  ],
+  "classes": [
+    "UNDER_RIPE",
+    "HALF_RIPE",
+    "RIPE",
+    "OVER_RIPE"
+  ]
+}
