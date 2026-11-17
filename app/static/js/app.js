@@ -5,6 +5,8 @@
  */
 
 let currentActiveBatches = [];
+let currentTelemetryPoints = [];
+let currentGasMetrics = null;
 
 async function fetchAdvisorData() {
   try {
@@ -27,10 +29,17 @@ function updateBatchDropdowns(batches) {
     const el = document.getElementById(id);
     if (!el) return;
     const currentVal = el.value;
-    const optionsHtml = batches.map(b => `<option value="${b.batch_id}">${b.batch_id} (${b.variety})</option>`).join('');
-    el.innerHTML = optionsHtml;
-    if (currentVal && batches.some(b => b.batch_id === currentVal)) {
-      el.value = currentVal;
+    const currentOptions = Array.from(el.options).map(o => o.value);
+    const newOptions = batches.map(b => b.batch_id);
+    // Only update if options changed to prevent interrupting user interaction
+    const optionsChanged = currentOptions.length !== newOptions.length ||
+      currentOptions.some((val, idx) => val !== newOptions[idx]);
+    if (optionsChanged) {
+      const optionsHtml = batches.map(b => `<option value="${b.batch_id}">${b.batch_id} (${b.variety})</option>`).join('');
+      el.innerHTML = optionsHtml;
+      if (currentVal && batches.some(b => b.batch_id === currentVal)) {
+        el.value = currentVal;
+      }
     }
   });
 }
@@ -166,6 +175,9 @@ async function loadAnalyticsForSelectedBatch() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     
+    currentTelemetryPoints = data.points || [];
+    currentGasMetrics = data.gas_metrics || null;
+
     renderGasKPIs(data.gas_metrics);
     renderGasChart(data.points, data.gas_metrics);
     renderClimateChart(data.points);
@@ -289,9 +301,13 @@ function renderGasChart(points, metrics) {
       const time = pt.getAttribute('data-time');
       const val = pt.getAttribute('data-val');
       const prov = pt.getAttribute('data-prov');
+      const cx = parseFloat(pt.getAttribute('cx')) || 0;
+      const cy = parseFloat(pt.getAttribute('cy')) || 0;
+      const tipLeft = Math.max(10, Math.min(width - 200, cx - 30));
+      const tipTop = Math.max(10, cy - 35);
       tooltip.style.display = 'block';
-      tooltip.style.left = `${pt.getAttribute('cx')}px`;
-      tooltip.style.top = `${parseFloat(pt.getAttribute('cy')) - 35}px`;
+      tooltip.style.left = `${tipLeft}px`;
+      tooltip.style.top = `${tipTop}px`;
       tooltip.innerHTML = `Time: ${time} | Gas: <strong>${val}</strong> [${prov}]`;
     });
     pt.addEventListener('mouseleave', () => {
@@ -383,9 +399,13 @@ function renderClimateChart(points) {
       const temp = pt.getAttribute('data-temp');
       const hum = pt.getAttribute('data-hum');
       const prov = pt.getAttribute('data-prov');
+      const cx = parseFloat(pt.getAttribute('cx')) || 0;
+      const cy = parseFloat(pt.getAttribute('cy')) || 0;
+      const tipLeft = Math.max(10, Math.min(width - 240, cx - 40));
+      const tipTop = Math.max(10, cy - 35);
       tooltip.style.display = 'block';
-      tooltip.style.left = `${pt.getAttribute('cx')}px`;
-      tooltip.style.top = `${parseFloat(pt.getAttribute('cy')) - 35}px`;
+      tooltip.style.left = `${tipLeft}px`;
+      tooltip.style.top = `${tipTop}px`;
       tooltip.innerHTML = `Time: ${time} | Temp: <strong>${temp}°C</strong> | RH: <strong>${hum}%</strong> [${prov}]`;
     });
     pt.addEventListener('mouseleave', () => {
@@ -394,14 +414,95 @@ function renderClimateChart(points) {
   });
 }
 
-function exportSelectedBatchCSV() {
-  const select = document.getElementById('analytics-batch-select');
-  const batchId = select ? select.value : 'BATCH-001-COLD';
-  window.location.href = `/api/telemetry/export/csv?batch_id=${encodeURIComponent(batchId)}`;
+// =============================================================================
+// CSV EXPORT ENGINE (ASYNC BLOB STREAMING & UI PROTECTION)
+// =============================================================================
+
+let isExporting = false;
+
+async function downloadCSV(url, fallbackFilename, buttonEl) {
+  if (isExporting) {
+    console.warn("CSV export already in progress. Ignoring duplicate request.");
+    return;
+  }
+  isExporting = true;
+  const originalHtml = buttonEl ? buttonEl.innerHTML : null;
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.innerHTML = '⏳ Exporting...';
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout guard
+
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'text/csv' },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      let detail = `Server responded with HTTP ${res.status}`;
+      try {
+        const errData = await res.json();
+        if (errData && errData.detail) detail = errData.detail;
+      } catch (_) {}
+      alert(`Export failed: ${detail}`);
+      return;
+    }
+
+    // Parse filename from Content-Disposition header if available
+    let filename = fallbackFilename;
+    const disposition = res.headers.get('Content-Disposition');
+    if (disposition && disposition.includes('filename=')) {
+      const match = disposition.match(/filename=["']?([^"';]+)["']?/i);
+      if (match && match[1]) {
+        filename = match[1].trim();
+      }
+    }
+
+    const blob = await res.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    // Revoke blob URL after short delay to free memory
+    setTimeout(() => {
+      window.URL.revokeObjectURL(blobUrl);
+    }, 1500);
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      alert("CSV export request timed out. Please try again.");
+    } else {
+      console.error("Export error:", err);
+      alert(`Failed to download CSV: ${err.message || 'Network error'}`);
+    }
+  } finally {
+    isExporting = false;
+    if (buttonEl && originalHtml) {
+      buttonEl.disabled = false;
+      buttonEl.innerHTML = originalHtml;
+    }
+  }
 }
 
-function exportAllBatchesCSV() {
-  window.location.href = '/api/telemetry/export/csv';
+function exportSelectedBatchCSV(e) {
+  const select = document.getElementById('analytics-batch-select');
+  const batchId = select ? select.value : 'BATCH-001-COLD';
+  const btn = (e && e.currentTarget) || document.getElementById('btn-export-batch');
+  downloadCSV(`/api/telemetry/export/csv?batch_id=${encodeURIComponent(batchId)}`, `banana_telemetry_${batchId}.csv`, btn);
+}
+
+function exportAllBatchesCSV(e) {
+  const btn = (e && e.currentTarget) || document.getElementById('btn-export-all');
+  downloadCSV('/api/telemetry/export/csv', 'banana_telemetry_all_batches.csv', btn);
 }
 
 // =============================================================================
@@ -478,7 +579,18 @@ async function submitVisionImage(e) {
   }
 }
 
-// Initial fetch and 10s polling interval
+// Initial fetch, 10s polling interval, and responsive resize listener
+let resizeDebounceTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeDebounceTimer);
+  resizeDebounceTimer = setTimeout(() => {
+    if (currentTelemetryPoints && currentTelemetryPoints.length > 0) {
+      renderGasChart(currentTelemetryPoints, currentGasMetrics);
+      renderClimateChart(currentTelemetryPoints);
+    }
+  }, 150);
+});
+
 document.addEventListener('DOMContentLoaded', () => {
   fetchAdvisorData().then(() => {
     loadAnalyticsForSelectedBatch();

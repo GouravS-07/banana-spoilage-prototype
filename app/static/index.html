@@ -74,8 +74,8 @@
             <option value="BATCH-003-HOTBOX">BATCH-003-HOTBOX</option>
           </select>
           <button class="btn" onclick="loadAnalyticsForSelectedBatch()" title="Refresh telemetry points">↻ Refresh</button>
-          <button class="btn" style="background:#059669;" onclick="exportSelectedBatchCSV()" title="Export CSV for selected batch">📥 Export Batch CSV</button>
-          <button class="btn" style="background:#475569;" onclick="exportAllBatchesCSV()" title="Export all telemetry CSV">📥 Export All CSV</button>
+          <button class="btn" id="btn-export-batch" style="background:#059669;" onclick="exportSelectedBatchCSV(event)" title="Export CSV for selected batch">📥 Export Batch CSV</button>
+          <button class="btn" id="btn-export-all" style="background:#475569;" onclick="exportAllBatchesCSV(event)" title="Export all telemetry CSV">📥 Export All CSV</button>
         </div>
       </div>
 

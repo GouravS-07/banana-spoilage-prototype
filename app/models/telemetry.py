@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -23,3 +23,7 @@ class SensorReading(Base):
     signal_quality = Column(String(32), nullable=False, default="OK")
 
     batch = relationship("Batch", back_populates="telemetry_readings")
+
+    __table_args__ = (
+        Index("ix_sensor_readings_batch_timestamp", "batch_id", "timestamp"),
+    )

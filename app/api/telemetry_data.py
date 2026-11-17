@@ -4,14 +4,15 @@ Historical Telemetry, Gas Monitoring, and CSV Export Endpoints.
 
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, Query, HTTPException, Response
+from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.batch import Batch
 from app.services.gas_monitor import (
     get_historical_telemetry,
     compute_gas_baseline_metrics,
-    format_telemetry_csv,
+    generate_telemetry_csv_stream,
 )
 
 router = APIRouter(prefix="/api/telemetry", tags=["Telemetry Data & Gas Monitoring"])
@@ -83,21 +84,32 @@ def export_telemetry_csv(
     db: Session = Depends(get_db)
 ):
     """
-    Exports sensor telemetry history to downloadable CSV file.
+    Exports sensor telemetry history to downloadable CSV file via chunked streaming response.
     Includes raw readings, calculated baseline reference, deviation %, and simulation labels.
+    Prevents browser hangs and high memory allocations on large exports.
     """
+    if batch_id and batch_id != "ALL":
+        batch = db.query(Batch).filter(Batch.id == batch_id).first()
+        if not batch:
+            raise HTTPException(status_code=404, detail=f"Batch '{batch_id}' not found.")
+
     readings = get_historical_telemetry(db, batch_id=batch_id, limit=limit)
-    csv_content = format_telemetry_csv(readings)
 
     now_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    b_slug = batch_id or "all_batches"
+    b_slug = batch_id if (batch_id and batch_id != "ALL") else "all_batches"
     filename = f"banana_telemetry_{b_slug}_{now_str}.csv"
 
-    return Response(
-        content=csv_content,
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Content-Type": "text/csv; charset=utf-8",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+    }
+
+    return StreamingResponse(
+        content=generate_telemetry_csv_stream(readings, chunk_size=100),
         media_type="text/csv",
-        headers={
-            "Content-Disposition": f"attachment; filename={filename}",
-            "Cache-Control": "no-cache",
-        }
+        headers=headers
     )

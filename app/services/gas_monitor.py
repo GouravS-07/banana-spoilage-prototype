@@ -11,7 +11,7 @@ IMPORTANT SCIENTIFIC INTEGRITY NOTICE:
 3. Every generated reading in this module is labeled explicitly as SIMULATED.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Iterator
 from datetime import datetime, timezone
 import csv
 import io
@@ -43,14 +43,14 @@ def compute_gas_baseline_metrics(
             "explanation": "No telemetry readings recorded for this batch yet."
         }
 
-    # Use the earliest recorded reading (or first 3 avg) as the baseline for this batch
+    # Use the earliest recorded reading as the baseline for this batch
     initial_sample = readings[0].gas_resistance_raw
     baseline_ratio = round(initial_sample, 3) if initial_sample > 0 else nominal_baseline
     latest_sample = readings[-1].gas_resistance_raw
 
     # In MQ sensors, resistance drops when reducing gases / VOCs are present.
     # Deviation calculates the percentage drop from baseline.
-    if latest_sample < baseline_ratio:
+    if baseline_ratio > 0 and latest_sample < baseline_ratio:
         deviation_pct = round(((baseline_ratio - latest_sample) / baseline_ratio) * 100.0, 1)
     else:
         deviation_pct = 0.0
@@ -110,8 +110,14 @@ def get_historical_telemetry(
     # Reverse to return ascending chronological order (oldest to newest)
     return list(reversed(readings))
 
-def format_telemetry_csv(readings: List[SensorReading]) -> str:
-    """Formats sensor telemetry records into standard RFC 4180 CSV."""
+def generate_telemetry_csv_stream(
+    readings: List[SensorReading],
+    chunk_size: int = 100
+) -> Iterator[str]:
+    """
+    Streams sensor telemetry records into RFC 4180 CSV in chunks.
+    Avoids monolithic in-memory string accumulation and prevents browser timeouts.
+    """
     output = io.StringIO()
     writer = csv.writer(output, lineterminator="\n")
 
@@ -130,16 +136,22 @@ def format_telemetry_csv(readings: List[SensorReading]) -> str:
         "sensor_device_id",
         "signal_quality",
     ])
+    yield output.getvalue()
+    output.seek(0)
+    output.truncate(0)
 
-    # Compute baseline reference per batch in memory for CSV columns
+    # Establish baseline reference per batch (chronologically first sample seen)
     batch_baselines: Dict[str, float] = {}
     for r in readings:
         if r.batch_id not in batch_baselines:
             batch_baselines[r.batch_id] = r.gas_resistance_raw
 
-    for r in readings:
+    for idx, r in enumerate(readings, start=1):
         b_base = batch_baselines.get(r.batch_id, settings.GAS_BASELINE_DEFAULT_RATIO)
-        dev = round(((b_base - r.gas_resistance_raw) / b_base) * 100.0, 1) if r.gas_resistance_raw < b_base else 0.0
+        if b_base > 0 and r.gas_resistance_raw < b_base:
+            dev = round(((b_base - r.gas_resistance_raw) / b_base) * 100.0, 1)
+        else:
+            dev = 0.0
         ts_str = r.timestamp.isoformat() if r.timestamp else ""
 
         writer.writerow([
@@ -157,4 +169,15 @@ def format_telemetry_csv(readings: List[SensorReading]) -> str:
             r.signal_quality,
         ])
 
-    return output.getvalue()
+        if idx % chunk_size == 0:
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+
+    remainder = output.getvalue()
+    if remainder:
+        yield remainder
+
+def format_telemetry_csv(readings: List[SensorReading]) -> str:
+    """Formats sensor telemetry records into standard RFC 4180 CSV string."""
+    return "".join(generate_telemetry_csv_stream(readings, chunk_size=500))

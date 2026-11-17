@@ -148,3 +148,6 @@ def test_nonexistent_batch_returns_404(client):
 
     resp_hist = client.get("/api/telemetry/history?batch_id=NON-EXISTENT")
     assert resp_hist.status_code == 404
+
+    resp_csv = client.get("/api/telemetry/export/csv?batch_id=NON-EXISTENT")
+    assert resp_csv.status_code == 404
