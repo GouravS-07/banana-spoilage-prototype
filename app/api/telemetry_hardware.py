@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
+from app.config import settings
 from app.database import get_db
 from app.models.batch import Batch
 from app.models.device import RegisteredDevice
@@ -20,7 +21,21 @@ def ingest_physical_telemetry(
     Ingest physical ESP32 sensor telemetry.
     STRICT PROVENANCE: Requires valid X-Device-Token header corresponding to
     a registered hardware device. Tags reading immutably as 'PHYSICAL_HARDWARE'.
+
+    NOTE: Physical telemetry is disabled by default until hardware bench-testing
+    is performed with actual ESP32/sensors.
     """
+    if not settings.ENABLE_PHYSICAL_HARDWARE_INGESTION:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Physical hardware telemetry ingestion is currently disabled. "
+                "No physical ESP32 or sensors are connected. All active monitoring "
+                "uses simulated telemetry. Enable 'ENABLE_PHYSICAL_HARDWARE_INGESTION' "
+                "only when actual hardware is connected and bench-tested."
+            )
+        )
+
     if not x_device_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

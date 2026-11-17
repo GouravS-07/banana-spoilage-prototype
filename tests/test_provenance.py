@@ -22,7 +22,28 @@ def test_simulated_ingestion_enforces_simulated_provenance(client):
     assert data["provenance"] == "SIMULATED"
     assert data["ingestion_route"] == "/api/telemetry/simulated"
 
-def test_physical_telemetry_rejects_missing_token(client):
+def test_physical_telemetry_disabled_by_default(client):
+    """
+    Verifies that physical telemetry ingestion is disabled by default
+    when physical sensors/ESP32 are not connected.
+    """
+    client.post("/api/batches", json={"id": "BATCH-PROV-DISABLED", "variety": "Robusta"})
+
+    payload = {
+        "batch_id": "BATCH-PROV-DISABLED",
+        "temperature_c": 18.0,
+        "relative_humidity_pct": 86.0,
+        "gas_resistance_raw": 0.95,
+    }
+    headers = {"X-Device-Token": "valid-test-token-xyz"}
+    resp = client.post("/api/telemetry/physical", json=payload, headers=headers)
+    assert resp.status_code == 503
+    assert "Physical hardware telemetry ingestion is currently disabled" in resp.json()["detail"]
+
+def test_physical_telemetry_rejects_missing_token_when_enabled(client, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "ENABLE_PHYSICAL_HARDWARE_INGESTION", True)
+
     client.post("/api/batches", json={"id": "BATCH-PROV-2", "variety": "Robusta"})
 
     payload = {
@@ -37,7 +58,10 @@ def test_physical_telemetry_rejects_missing_token(client):
     assert resp.status_code == 401
     assert "Missing 'X-Device-Token'" in resp.json()["detail"]
 
-def test_physical_telemetry_rejects_invalid_token(client):
+def test_physical_telemetry_rejects_invalid_token_when_enabled(client, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "ENABLE_PHYSICAL_HARDWARE_INGESTION", True)
+
     client.post("/api/batches", json={"id": "BATCH-PROV-3", "variety": "Robusta"})
 
     payload = {
@@ -52,7 +76,10 @@ def test_physical_telemetry_rejects_invalid_token(client):
     assert resp.status_code == 401
     assert "Invalid or deactivated device token" in resp.json()["detail"]
 
-def test_physical_telemetry_accepts_valid_token_and_sets_provenance(client):
+def test_physical_telemetry_accepts_valid_token_and_sets_provenance_when_enabled(client, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "ENABLE_PHYSICAL_HARDWARE_INGESTION", True)
+
     client.post("/api/batches", json={"id": "BATCH-PROV-4", "variety": "Robusta"})
 
     payload = {

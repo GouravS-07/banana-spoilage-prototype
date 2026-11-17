@@ -59,6 +59,72 @@
       </div>
     </div>
 
+    <!-- GAS MONITORING & HISTORICAL TELEMETRY ANALYTICS -->
+    <div class="card" id="analytics-section">
+      <div class="card-title" style="flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <span>📈 Gas-Sensor Monitoring & Historical Telemetry</span>
+          <span class="badge badge-simulated">100% SIMULATED TELEMETRY</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <label style="font-size: 13px; font-weight: 600; color: #475569;" for="analytics-batch-select">Selected Batch:</label>
+          <select id="analytics-batch-select" class="form-control" style="width: auto; padding: 4px 8px;" onchange="loadAnalyticsForSelectedBatch()">
+            <option value="BATCH-001-COLD">BATCH-001-COLD</option>
+            <option value="BATCH-002-AMBIENT">BATCH-002-AMBIENT</option>
+            <option value="BATCH-003-HOTBOX">BATCH-003-HOTBOX</option>
+          </select>
+          <button class="btn" onclick="loadAnalyticsForSelectedBatch()" title="Refresh telemetry points">↻ Refresh</button>
+          <button class="btn" style="background:#059669;" onclick="exportSelectedBatchCSV()" title="Export CSV for selected batch">📥 Export Batch CSV</button>
+          <button class="btn" style="background:#475569;" onclick="exportAllBatchesCSV()" title="Export all telemetry CSV">📥 Export All CSV</button>
+        </div>
+      </div>
+
+      <!-- Gas Monitoring & Baseline KPI Cards -->
+      <div class="grid-4" id="gas-kpi-container" style="margin-bottom: 16px;">
+        <!-- Populated dynamically -->
+      </div>
+
+      <div style="background: #f8fafc; border: 1px dashed var(--border-color); border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #64748b; margin-bottom: 20px;">
+        <strong>Scientific Notice:</strong> MQ-135 readings represent uncalibrated relative electrical resistance ratios ($R_s / R_0$). A drop in resistance indicates rising volatile organic compounds (VOCs / ripening emissions). This auxiliary signal does not measure calibrated ethylene concentration or microbial decay.
+      </div>
+
+      <!-- Dual Historical Charts Grid -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 20px;">
+        <!-- Gas Ratio Chart -->
+        <div class="chart-box">
+          <div class="chart-header">
+            <strong>Gas Resistance Ratio ($R_s / R_0$) vs. Baseline Trend</strong>
+            <span class="badge badge-simulated">SIMULATED</span>
+          </div>
+          <div id="gas-chart-wrapper" class="svg-chart-wrapper">
+            <svg id="gas-chart-svg" width="100%" height="240"></svg>
+            <div id="gas-chart-tooltip" class="chart-tooltip"></div>
+          </div>
+          <div class="chart-legend">
+            <span><span class="legend-dot" style="background:#0284c7;"></span> Resistance Ratio ($R_s/R_0$)</span>
+            <span><span class="legend-line" style="border-color:#10b981;"></span> Initial Baseline ($R_0$)</span>
+            <span><span class="legend-line" style="border-color:#ef4444;"></span> Volatile Surge Threshold (0.75)</span>
+          </div>
+        </div>
+
+        <!-- Climate Chart -->
+        <div class="chart-box">
+          <div class="chart-header">
+            <strong>Storage Climate: Temperature (°C) & Humidity (% RH)</strong>
+            <span class="badge badge-simulated">SIMULATED</span>
+          </div>
+          <div id="climate-chart-wrapper" class="svg-chart-wrapper">
+            <svg id="climate-chart-svg" width="100%" height="240"></svg>
+            <div id="climate-chart-tooltip" class="chart-tooltip"></div>
+          </div>
+          <div class="chart-legend">
+            <span><span class="legend-dot" style="background:#f97316;"></span> Temperature (°C) [Target: 13-15°]</span>
+            <span><span class="legend-dot" style="background:#06b6d4;"></span> Humidity (% RH) [Target: 85-90%]</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- INGESTION & TESTING PANEL -->
     <div class="card">
       <div class="card-title">

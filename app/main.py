@@ -19,6 +19,7 @@ from app.api import (
     batches_router,
     telemetry_sim_router,
     telemetry_hw_router,
+    telemetry_data_router,
     vision_router,
     advisor_router,
 )
@@ -76,47 +77,56 @@ def seed_demo_data():
             db.add_all([b1, b2, b3])
             db.commit()
 
-            # Seed initial telemetry (strictly tagged as SIMULATED)
-            # B1: Optimal temp (14°C), ideal humidity (88%), nominal clean air gas ratio (0.98)
-            r1 = SensorReading(
-                batch_id=b1.id,
-                timestamp=now - timedelta(minutes=5),
-                temperature_c=14.2,
-                relative_humidity_pct=88.0,
-                gas_resistance_raw=0.98,
-                current_weight_kg=24.9,
-                provenance="SIMULATED",
-                ingestion_route="/api/telemetry/simulated",
-                sensor_device_id="SIMULATOR_SEED",
-                signal_quality="OK",
-            )
-            # B2: Warm temp (19°C), slightly low humidity (82%), mild gas variation (0.92)
-            r2 = SensorReading(
-                batch_id=b2.id,
-                timestamp=now - timedelta(minutes=4),
-                temperature_c=19.5,
-                relative_humidity_pct=82.0,
-                gas_resistance_raw=0.92,
-                current_weight_kg=19.4,
-                provenance="SIMULATED",
-                ingestion_route="/api/telemetry/simulated",
-                sensor_device_id="SIMULATOR_SEED",
-                signal_quality="OK",
-            )
-            # B3: High heat (26.5°C), high humidity (94%), sharp gas resistance drop (0.68)
-            r3 = SensorReading(
-                batch_id=b3.id,
-                timestamp=now - timedelta(minutes=2),
-                temperature_c=26.5,
-                relative_humidity_pct=94.0,
-                gas_resistance_raw=0.68,
-                current_weight_kg=26.8,
-                provenance="SIMULATED",
-                ingestion_route="/api/telemetry/simulated",
-                sensor_device_id="SIMULATOR_SEED",
-                signal_quality="OK",
-            )
-            db.add_all([r1, r2, r3])
+            # Seed realistic time-series telemetry (strictly tagged as SIMULATED)
+            # 10 historical readings per batch across the past 12 hours
+            readings_to_seed = []
+            
+            # Batch 1: Optimal Cold Storage (stable baseline ~0.98, temp ~14°C, RH ~88%)
+            for i in range(10, -1, -1):
+                readings_to_seed.append(SensorReading(
+                    batch_id=b1.id,
+                    timestamp=now - timedelta(hours=i * 1.2),
+                    temperature_c=round(14.0 + (i % 3) * 0.1, 2),
+                    relative_humidity_pct=round(88.0 + (i % 2) * 0.5, 2),
+                    gas_resistance_raw=round(0.98 - (10 - i) * 0.001, 3),
+                    current_weight_kg=round(25.0 - (10 - i) * 0.01, 2),
+                    provenance="SIMULATED",
+                    ingestion_route="/api/telemetry/simulated",
+                    sensor_device_id="SIMULATOR_SEED",
+                    signal_quality="OK",
+                ))
+
+            # Batch 2: Ambient Store Shelf (mild volatile activity, gas drops 0.96 -> 0.91)
+            for i in range(10, -1, -1):
+                readings_to_seed.append(SensorReading(
+                    batch_id=b2.id,
+                    timestamp=now - timedelta(hours=i * 1.2),
+                    temperature_c=round(19.2 + (i % 3) * 0.2, 2),
+                    relative_humidity_pct=round(82.0 + (i % 2) * 0.8, 2),
+                    gas_resistance_raw=round(0.96 - (10 - i) * 0.005, 3),
+                    current_weight_kg=round(20.0 - (10 - i) * 0.04, 2),
+                    provenance="SIMULATED",
+                    ingestion_route="/api/telemetry/simulated",
+                    sensor_device_id="SIMULATOR_SEED",
+                    signal_quality="OK",
+                ))
+
+            # Batch 3: Hot & Humid Chamber (volatile surge, gas drops 0.92 -> 0.65)
+            for i in range(10, -1, -1):
+                readings_to_seed.append(SensorReading(
+                    batch_id=b3.id,
+                    timestamp=now - timedelta(hours=i * 1.2),
+                    temperature_c=round(26.2 + (i % 3) * 0.3, 2),
+                    relative_humidity_pct=round(93.5 + (i % 2) * 0.5, 2),
+                    gas_resistance_raw=round(0.92 - (10 - i) * 0.027, 3),
+                    current_weight_kg=round(28.0 - (10 - i) * 0.08, 2),
+                    provenance="SIMULATED",
+                    ingestion_route="/api/telemetry/simulated",
+                    sensor_device_id="SIMULATOR_SEED",
+                    signal_quality="OK",
+                ))
+
+            db.add_all(readings_to_seed)
 
             # Seed placeholder vision records (is_mock_inference=True)
             v1 = VisionRecord(
@@ -172,6 +182,7 @@ app = FastAPI(
 app.include_router(batches_router)
 app.include_router(telemetry_sim_router)
 app.include_router(telemetry_hw_router)
+app.include_router(telemetry_data_router)
 app.include_router(vision_router)
 app.include_router(advisor_router)
 

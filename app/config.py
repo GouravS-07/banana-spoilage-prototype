@@ -55,5 +55,10 @@ class Settings(BaseSettings):
 
     # MQ-135 Clean-Air Baseline Resistance (Rs / R0 ratio reference)
     GAS_RATIO_NOMINAL_MIN: float = 0.95
+    GAS_BASELINE_DEFAULT_RATIO: float = 0.98
+
+    # Hardware Integration Safeguard
+    # Physical telemetry ingestion is disabled until physical ESP32 & sensors are bench-tested.
+    ENABLE_PHYSICAL_HARDWARE_INGESTION: bool = False
 
 settings = Settings()

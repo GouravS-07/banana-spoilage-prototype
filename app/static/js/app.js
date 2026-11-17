@@ -1,17 +1,43 @@
+/**
+ * Banana Spoilage Advisor Frontend Logic
+ * Supports real-time prioritization ranking, gas-sensor monitoring, baseline tracking,
+ * interactive SVG historical graphing, and CSV export.
+ */
+
+let currentActiveBatches = [];
+
 async function fetchAdvisorData() {
   try {
     const res = await fetch('/api/advisor/sell-first');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    renderRankingsTable(data.ranked_batches);
-    renderBatchCards(data.ranked_batches);
+    currentActiveBatches = data.ranked_batches || [];
+    renderRankingsTable(currentActiveBatches);
+    renderBatchCards(currentActiveBatches);
+    updateBatchDropdowns(currentActiveBatches);
   } catch (err) {
     console.error("Failed to fetch advisor data:", err);
   }
 }
 
+function updateBatchDropdowns(batches) {
+  if (!batches || batches.length === 0) return;
+  const selectIds = ['analytics-batch-select', 'sim-batch-id', 'vis-batch-id'];
+  selectIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const currentVal = el.value;
+    const optionsHtml = batches.map(b => `<option value="${b.batch_id}">${b.batch_id} (${b.variety})</option>`).join('');
+    el.innerHTML = optionsHtml;
+    if (currentVal && batches.some(b => b.batch_id === currentVal)) {
+      el.value = currentVal;
+    }
+  });
+}
+
 function renderRankingsTable(batches) {
   const tbody = document.getElementById('ranked-batches-tbody');
+  if (!tbody) return;
   if (!batches || batches.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No active batches found.</td></tr>';
     return;
@@ -65,6 +91,7 @@ function renderRankingsTable(batches) {
 
 function renderBatchCards(batches) {
   const container = document.getElementById('batch-cards-container');
+  if (!container) return;
   if (!batches || batches.length === 0) {
     container.innerHTML = '<p>No batch telemetry records available.</p>';
     return;
@@ -126,6 +153,261 @@ function renderBatchCards(batches) {
   }).join('');
 }
 
+// =============================================================================
+// GAS MONITORING, HISTORICAL ANALYTICS & SVG GRAPHING
+// =============================================================================
+
+async function loadAnalyticsForSelectedBatch() {
+  const select = document.getElementById('analytics-batch-select');
+  const batchId = select ? select.value : 'BATCH-001-COLD';
+
+  try {
+    const res = await fetch(`/api/telemetry/history?batch_id=${encodeURIComponent(batchId)}&limit=150`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    
+    renderGasKPIs(data.gas_metrics);
+    renderGasChart(data.points, data.gas_metrics);
+    renderClimateChart(data.points);
+  } catch (err) {
+    console.error("Failed to load historical analytics:", err);
+  }
+}
+
+function renderGasKPIs(metrics) {
+  const container = document.getElementById('gas-kpi-container');
+  if (!container || !metrics) return;
+
+  let statusBadge = '<span class="badge badge-tier-low">BASELINE STABLE</span>';
+  if (metrics.trend_status === 'CRITICAL_FERMENTATION_RISK') {
+    statusBadge = '<span class="badge badge-tier-critical">CRITICAL FERMENTATION RISK</span>';
+  } else if (metrics.trend_status === 'ELEVATED_VOLATILE_SURGE') {
+    statusBadge = '<span class="badge badge-tier-high">ELEVATED VOLATILE SURGE</span>';
+  } else if (metrics.trend_status === 'MILD_VOLATILE_ACTIVITY') {
+    statusBadge = '<span class="badge badge-tier-moderate">MILD VOLATILE ACTIVITY</span>';
+  }
+
+  const curVal = metrics.current_ratio !== null ? metrics.current_ratio.toFixed(3) : 'N/A';
+  const baseVal = metrics.baseline_ratio !== null ? metrics.baseline_ratio.toFixed(3) : '0.980';
+  const devVal = metrics.deviation_pct !== null ? `${metrics.deviation_pct.toFixed(1)}%` : '0.0%';
+
+  container.innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-title">Current Gas Ratio (Rs/R0)</div>
+      <div class="kpi-value" style="color:#0284c7;">${curVal}</div>
+      <div class="kpi-subtext">Direction: <strong>${metrics.trend_direction || 'STABLE'}</strong></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">Initial Baseline Reference (R0)</div>
+      <div class="kpi-value">${baseVal}</div>
+      <div class="kpi-subtext">Established from batch onset</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">Volatile Deviation (Δ%)</div>
+      <div class="kpi-value" style="color: ${metrics.deviation_pct > 20 ? '#ef4444' : '#059669'};">-${devVal}</div>
+      <div class="kpi-subtext">Resistance reduction from baseline</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">Volatiles Status</div>
+      <div style="margin: 6px 0;">${statusBadge}</div>
+      <div class="kpi-subtext">${metrics.sample_count || 0} simulated samples</div>
+    </div>
+  `;
+}
+
+function renderGasChart(points, metrics) {
+  const svg = document.getElementById('gas-chart-svg');
+  const tooltip = document.getElementById('gas-chart-tooltip');
+  if (!svg) return;
+
+  const width = svg.clientWidth || 500;
+  const height = 240;
+  const padding = { top: 20, right: 30, bottom: 35, left: 45 };
+
+  if (!points || points.length === 0) {
+    svg.innerHTML = `<text x="${width/2}" y="${height/2}" text-anchor="middle" fill="#94a3b8" font-size="13">No historical telemetry points available</text>`;
+    return;
+  }
+
+  const plotW = width - padding.left - padding.right;
+  const plotH = height - padding.top - padding.bottom;
+
+  // Gas ratio range typically [0.50, 1.05]
+  const minY = 0.50;
+  const maxY = 1.05;
+
+  const scaleX = (idx) => padding.left + (idx / Math.max(1, points.length - 1)) * plotW;
+  const scaleY = (val) => padding.top + plotH - ((val - minY) / (maxY - minY)) * plotH;
+
+  // Build grid lines
+  let gridHtml = '';
+  [0.6, 0.75, 0.9, 1.0].forEach(v => {
+    const y = scaleY(v);
+    gridHtml += `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#f1f5f9" stroke-width="1" />`;
+    gridHtml += `<text x="${padding.left - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#94a3b8">${v.toFixed(2)}</text>`;
+  });
+
+  // Reference lines: Baseline R0 (Green dashed), Surge threshold 0.75 (Red dashed)
+  const baseVal = metrics && metrics.baseline_ratio ? metrics.baseline_ratio : 0.98;
+  const baseY = scaleY(baseVal);
+  const surgeY = scaleY(0.75);
+
+  const baselineRefLine = `<line x1="${padding.left}" y1="${baseY}" x2="${width - padding.right}" y2="${baseY}" stroke="#10b981" stroke-width="1.5" stroke-dasharray="4 3" />`;
+  const surgeRefLine = `<line x1="${padding.left}" y1="${surgeY}" x2="${width - padding.right}" y2="${surgeY}" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4 3" />`;
+
+  // Build path
+  const lineCoords = points.map((p, idx) => `${scaleX(idx)},${scaleY(p.gas_resistance_raw)}`).join(' L ');
+  const pathHtml = `<path d="M ${lineCoords}" fill="none" stroke="#0284c7" stroke-width="2.5" />`;
+
+  // Build hover dots
+  let dotsHtml = '';
+  points.forEach((p, idx) => {
+    const cx = scaleX(idx);
+    const cy = scaleY(p.gas_resistance_raw);
+    dotsHtml += `
+      <circle cx="${cx}" cy="${cy}" r="4" fill="#0284c7" stroke="#ffffff" stroke-width="1.5" class="chart-point"
+        data-time="${p.timestamp ? p.timestamp.substring(11, 19) : ''}"
+        data-val="${p.gas_resistance_raw.toFixed(3)}"
+        data-prov="${p.provenance}"
+      />
+    `;
+  });
+
+  svg.innerHTML = `
+    ${gridHtml}
+    ${baselineRefLine}
+    ${surgeRefLine}
+    ${pathHtml}
+    ${dotsHtml}
+    <text x="${padding.left}" y="${height - 8}" font-size="10" fill="#94a3b8">Earliest Record</text>
+    <text x="${width - padding.right}" y="${height - 8}" text-anchor="end" font-size="10" fill="#94a3b8">Latest (${points.length} pts)</text>
+  `;
+
+  // Attach hover events
+  svg.querySelectorAll('.chart-point').forEach(pt => {
+    pt.addEventListener('mouseenter', (e) => {
+      const time = pt.getAttribute('data-time');
+      const val = pt.getAttribute('data-val');
+      const prov = pt.getAttribute('data-prov');
+      tooltip.style.display = 'block';
+      tooltip.style.left = `${pt.getAttribute('cx')}px`;
+      tooltip.style.top = `${parseFloat(pt.getAttribute('cy')) - 35}px`;
+      tooltip.innerHTML = `Time: ${time} | Gas: <strong>${val}</strong> [${prov}]`;
+    });
+    pt.addEventListener('mouseleave', () => {
+      tooltip.style.display = 'none';
+    });
+  });
+}
+
+function renderClimateChart(points) {
+  const svg = document.getElementById('climate-chart-svg');
+  const tooltip = document.getElementById('climate-chart-tooltip');
+  if (!svg) return;
+
+  const width = svg.clientWidth || 500;
+  const height = 240;
+  const padding = { top: 20, right: 35, bottom: 35, left: 40 };
+
+  if (!points || points.length === 0) {
+    svg.innerHTML = `<text x="${width/2}" y="${height/2}" text-anchor="middle" fill="#94a3b8" font-size="13">No climate telemetry points available</text>`;
+    return;
+  }
+
+  const plotW = width - padding.left - padding.right;
+  const plotH = height - padding.top - padding.bottom;
+
+  // Temperature axis: [10°C, 35°C]
+  const minT = 10.0;
+  const maxT = 35.0;
+  // Humidity axis: [50%, 100%]
+  const minH = 50.0;
+  const maxH = 100.0;
+
+  const scaleX = (idx) => padding.left + (idx / Math.max(1, points.length - 1)) * plotW;
+  const scaleTemp = (val) => padding.top + plotH - ((val - minT) / (maxT - minT)) * plotH;
+  const scaleHum = (val) => padding.top + plotH - ((val - minH) / (maxH - minH)) * plotH;
+
+  // Grid
+  let gridHtml = '';
+  [15, 20, 25, 30].forEach(t => {
+    const y = scaleTemp(t);
+    gridHtml += `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#f1f5f9" stroke-width="1" />`;
+    gridHtml += `<text x="${padding.left - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#f97316">${t}°</text>`;
+  });
+  [60, 80, 95].forEach(h => {
+    const y = scaleHum(h);
+    gridHtml += `<text x="${width - padding.right + 6}" y="${y + 4}" font-size="10" fill="#06b6d4">${h}%</text>`;
+  });
+
+  // Target safe zone for Temp (13-15°C) shaded
+  const yOptMin = scaleTemp(13.0);
+  const yOptMax = scaleTemp(15.0);
+  const optZone = `<rect x="${padding.left}" y="${yOptMax}" width="${plotW}" height="${yOptMin - yOptMax}" fill="#10b981" fill-opacity="0.08" />`;
+
+  // Paths
+  const tempCoords = points.map((p, idx) => `${scaleX(idx)},${scaleTemp(p.temperature_c)}`).join(' L ');
+  const humCoords = points.map((p, idx) => `${scaleX(idx)},${scaleHum(p.relative_humidity_pct)}`).join(' L ');
+
+  const tempPath = `<path d="M ${tempCoords}" fill="none" stroke="#f97316" stroke-width="2" />`;
+  const humPath = `<path d="M ${humCoords}" fill="none" stroke="#06b6d4" stroke-width="2" stroke-dasharray="3 2" />`;
+
+  // Dots
+  let dotsHtml = '';
+  points.forEach((p, idx) => {
+    const cx = scaleX(idx);
+    const cyT = scaleTemp(p.temperature_c);
+    dotsHtml += `
+      <circle cx="${cx}" cy="${cyT}" r="3.5" fill="#f97316" class="climate-point"
+        data-time="${p.timestamp ? p.timestamp.substring(11, 19) : ''}"
+        data-temp="${p.temperature_c.toFixed(1)}"
+        data-hum="${p.relative_humidity_pct.toFixed(1)}"
+        data-prov="${p.provenance}"
+      />
+    `;
+  });
+
+  svg.innerHTML = `
+    ${gridHtml}
+    ${optZone}
+    ${tempPath}
+    ${humPath}
+    ${dotsHtml}
+    <text x="${padding.left}" y="${height - 8}" font-size="10" fill="#94a3b8">Past Records</text>
+    <text x="${width - padding.right}" y="${height - 8}" text-anchor="end" font-size="10" fill="#94a3b8">Latest</text>
+  `;
+
+  svg.querySelectorAll('.climate-point').forEach(pt => {
+    pt.addEventListener('mouseenter', (e) => {
+      const time = pt.getAttribute('data-time');
+      const temp = pt.getAttribute('data-temp');
+      const hum = pt.getAttribute('data-hum');
+      const prov = pt.getAttribute('data-prov');
+      tooltip.style.display = 'block';
+      tooltip.style.left = `${pt.getAttribute('cx')}px`;
+      tooltip.style.top = `${parseFloat(pt.getAttribute('cy')) - 35}px`;
+      tooltip.innerHTML = `Time: ${time} | Temp: <strong>${temp}°C</strong> | RH: <strong>${hum}%</strong> [${prov}]`;
+    });
+    pt.addEventListener('mouseleave', () => {
+      tooltip.style.display = 'none';
+    });
+  });
+}
+
+function exportSelectedBatchCSV() {
+  const select = document.getElementById('analytics-batch-select');
+  const batchId = select ? select.value : 'BATCH-001-COLD';
+  window.location.href = `/api/telemetry/export/csv?batch_id=${encodeURIComponent(batchId)}`;
+}
+
+function exportAllBatchesCSV() {
+  window.location.href = '/api/telemetry/export/csv';
+}
+
+// =============================================================================
+// INGESTION & SUBMISSION HANDLERS
+// =============================================================================
+
 async function submitSimulatedTelemetry(e) {
   e.preventDefault();
   const batchId = document.getElementById('sim-batch-id').value;
@@ -151,6 +433,7 @@ async function submitSimulatedTelemetry(e) {
       return;
     }
     await fetchAdvisorData();
+    await loadAnalyticsForSelectedBatch();
   } catch (err) {
     alert(`Failed to post telemetry: ${err.message}`);
   }
@@ -197,6 +480,8 @@ async function submitVisionImage(e) {
 
 // Initial fetch and 10s polling interval
 document.addEventListener('DOMContentLoaded', () => {
-  fetchAdvisorData();
+  fetchAdvisorData().then(() => {
+    loadAnalyticsForSelectedBatch();
+  });
   setInterval(fetchAdvisorData, 10000);
 });
